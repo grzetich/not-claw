@@ -30,12 +30,12 @@ async function checkReminders() {
     const now = new Date().toISOString();
     const result = await callTool("API-query-data-source", {
       data_source_id: TASKS_DB_ID,
-      filter: JSON.stringify({
+      filter: {
         and: [
           { property: "Status", select: { equals: "pending" } },
           { property: "DueAt", date: { on_or_before: now } },
         ],
-      }),
+      },
     });
 
     let tasks;
@@ -81,10 +81,10 @@ async function checkReminders() {
       try {
         await callTool("API-patch-page", {
           page_id: task.id,
-          properties: JSON.stringify({
+          properties: {
             Status: { select: { name: "done" } },
             CompletedAt: { date: { start: now } },
-          }),
+          },
         });
       } catch (err) {
         console.error(`[reminders] Failed to update task ${task.id}:`, err.message);

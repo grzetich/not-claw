@@ -12,14 +12,50 @@
 
 import cron from "node-cron";
 import { runAgent } from "./agent.js";
+import { connectMcp, callTool } from "./mcp-client.js";
 import { bot } from "./gateway.js";
 import "dotenv/config";
 
 const OWNER_ID = parseInt(process.env.TELEGRAM_OWNER_CHAT_ID, 10);
 const SCHEDULE = process.env.HEARTBEAT_CRON || "*/30 * * * *";
 const AGENT_NAME = process.env.AGENT_NAME || "Molty";
+const TASKS_DB_ID = process.env.NOTION_TASKS_DB_ID;
 
 let heartbeatRunning = false;
+
+/**
+ * Pre-check: query Tasks via MCP directly (no Claude call).
+ * Returns true if there are pending or in-progress tasks.
+ */
+async function hasPendingTasks() {
+  try {
+    await connectMcp();
+    const result = await callTool("API-query-data-source", {
+      data_source_id: TASKS_DB_ID,
+      filter: {
+        or: [
+          { property: "Status", select: { equals: "pending" } },
+          { property: "Status", select: { equals: "in-progress" } },
+        ],
+      },
+    });
+
+    let data;
+    try {
+      data = JSON.parse(result);
+    } catch {
+      // If we can't parse, assume there might be tasks and run the agent
+      return true;
+    }
+
+    const rows = data.results || data;
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (err) {
+    console.error("[heartbeat] Pre-check error:", err.message);
+    // On error, run the agent anyway to be safe
+    return true;
+  }
+}
 
 async function runHeartbeat() {
   if (heartbeatRunning) {
@@ -30,6 +66,16 @@ async function runHeartbeat() {
   heartbeatRunning = true;
   const timestamp = new Date().toISOString();
   console.log(`[heartbeat] Waking at ${timestamp}`);
+
+  // Pre-check: skip the full agent loop if nothing to do
+  const pending = await hasPendingTasks();
+  if (!pending) {
+    console.log("[heartbeat] No pending tasks, skipping agent call.");
+    heartbeatRunning = false;
+    return;
+  }
+
+  console.log("[heartbeat] Pending tasks found, running agent...");
 
   const prompt = `
 HEARTBEAT TRIGGER - ${timestamp}

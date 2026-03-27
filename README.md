@@ -56,7 +56,8 @@ You (Telegram)
 - **Skill system** — the agent can discover skills from Notion and write new ones back
 - **Proactive heartbeat** — cron-scheduled wakeups to work through the task queue autonomously
 - **Timed reminders** — set a DueAt on any task and get a Telegram ping at the exact time (checked every minute, zero API cost)
-- **Anthropic SDK** — direct API tool-use loop with Claude
+- **Anthropic SDK** — direct API tool-use loop with Claude (Sonnet for chat, Haiku for heartbeats)
+- **Cost-efficient heartbeats** — pre-checks for pending tasks via MCP before calling Claude; idle heartbeats cost $0
 - **Owner-only access** — your Telegram chat ID is the auth layer
 - **Single process** — one `node index.js` runs everything
 
@@ -153,11 +154,19 @@ Molty: Heartbeat — researched headphones. Top picks logged in task notes:
 
 **Why the Anthropic SDK with Notion MCP?**
 
-The Anthropic SDK's Messages API with tool-use gives us a clean agentic loop: Claude reasons, calls tools, observes results, and continues. The MCP client discovers all 22 Notion tools at startup and bridges them into Claude's tool-use format. Claude can search, read, create, and update anything in your Notion workspace.
+The Anthropic SDK's Messages API with tool-use gives us a clean agentic loop: Claude reasons, calls tools, observes results, and continues. The MCP client discovers all 22 Notion tools at startup and bridges them into Claude's tool-use format. Claude can search, read, create, and update anything in your Notion workspace. Interactive messages use Sonnet for quality; heartbeats use Haiku for cost.
+
+**Cost-efficient heartbeats**
+
+Before spinning up Claude, each heartbeat does a pre-check: it queries the Tasks database directly via MCP (no Claude call). If nothing is pending, the heartbeat skips entirely — $0 spent. When there is work, Haiku handles it at ~60x less than Sonnet. Idle overnight heartbeats cost essentially nothing.
 
 **Why Notion MCP?**
 
 The official `@notionhq/notion-mcp-server` exposes Notion's entire API as MCP tools that Claude can call natively. Search databases, read pages, create rows, update blocks — all from within the agent loop with no custom integration code. The agent can also discover new Notion databases it wasn't explicitly told about, which makes the system genuinely extensible.
+
+**Two-way collaboration**
+
+Because the brain is Notion, both you and the agent are equal participants. Tell the bot to add a task via Telegram, then open Notion later to add details or reprioritize. Write a skill page directly in Notion and the agent picks it up next session. Edit the Memory page to correct something the agent got wrong. Add tasks straight to the database and the heartbeat will find them. Neither the bot nor you owns the data — you share it.
 
 **Why not OpenClaw's actual stack?**
 

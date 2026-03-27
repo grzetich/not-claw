@@ -20,7 +20,8 @@ import "dotenv/config";
 
 const client = new Anthropic();
 const AGENT_NAME = process.env.AGENT_NAME || "Alfred";
-const MODEL = "claude-sonnet-4-6";
+const MODEL_INTERACTIVE = "claude-sonnet-4-6";
+const MODEL_HEARTBEAT = "claude-haiku-4-5-20251001";
 const MAX_TURNS = 20;
 
 /**
@@ -115,6 +116,9 @@ If asked about pending tasks, query Tasks and summarise clearly.`
  * @returns {string}       - Agent's final text response
  */
 export async function runAgent(prompt, mode = "interactive") {
+  const model = mode === "heartbeat" ? MODEL_HEARTBEAT : MODEL_INTERACTIVE;
+  console.log(`[agent] Using model: ${model}`);
+
   // Ensure MCP is connected and tools are discovered
   await connectMcp();
   const tools = await getTools();
@@ -124,7 +128,7 @@ export async function runAgent(prompt, mode = "interactive") {
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const response = await client.messages.create({
-      model: MODEL,
+      model,
       max_tokens: 4096,
       system: systemPrompt,
       tools,
