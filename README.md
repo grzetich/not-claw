@@ -31,10 +31,10 @@ You (Telegram)
  │  Heartbeat  │  ← node-cron     │   Notion Workspace  │
  │heartbeat.js │    (every 30 min) │  • 🧠 Soul page     │
  └─────────────┘                   │  • 🧠 Memory page   │
-                                   │  • ⚙️ Skills DB     │
-                                   │  • 📋 Tasks DB      │
-                                   │  • 💓 Heartbeat log │
-                                   └─────────────────────┘
+ ┌─────────────┐                   │  • ⚙️ Skills DB     │
+ │  Reminders  │  ← node-cron     │  • 📋 Tasks DB      │
+ │reminders.js │    (every 1 min)  │  • 💓 Heartbeat log │
+ └─────────────┘                   └─────────────────────┘
 ```
 
 **The agent runtime is the Anthropic SDK** — Claude reasons over messages, discovers Notion MCP tools, and calls them in an agentic loop. The MCP client (`mcp-client.js`) spawns the official `@notionhq/notion-mcp-server` as a stdio subprocess and bridges tool calls between Claude and Notion.
@@ -43,7 +43,7 @@ You (Telegram)
 - **Soul page** — who the agent is, personality, owner preferences (stable, owner-edited)
 - **Memory page** — long-term context the agent reads and writes each session
 - **Skills database** — pages of instructions, searchable and writable by the agent
-- **Tasks database** — the task queue; the agent reads and writes status, notes, and completion timestamps
+- **Tasks database** — the task queue with optional `DueAt` for timed reminders; the agent reads and writes status, notes, and timestamps
 - **Heartbeat log** — a record of every proactive run
 
 ---
@@ -55,6 +55,7 @@ You (Telegram)
 - **Notion-native memory** — all state in Notion, zero proprietary database
 - **Skill system** — the agent can discover skills from Notion and write new ones back
 - **Proactive heartbeat** — cron-scheduled wakeups to work through the task queue autonomously
+- **Timed reminders** — set a DueAt on any task and get a Telegram ping at the exact time (checked every minute, zero API cost)
 - **Anthropic SDK** — direct API tool-use loop with Claude
 - **Owner-only access** — your Telegram chat ID is the auth layer
 - **Single process** — one `node index.js` runs everything
@@ -101,6 +102,7 @@ NOTION_TASKS_DB_ID=...
 NOTION_HEARTBEAT_DB_ID=...
 HEARTBEAT_CRON=*/30 * * * *
 AGENT_NAME=Molty
+TIMEZONE=America/New_York
 ```
 
 ### 4. Run
@@ -128,6 +130,13 @@ Molty: You have 3 pending tasks:
         research noise-cancelling headphones under $200 (high)
         write Q1 review draft (medium)
         update grocery list (low)
+
+You: Remind me to call the dentist at 3pm
+Molty: Done — I've created a reminder task with DueAt set to 3:00 PM today.
+       You'll get a Telegram ping when it's time.
+
+[at 3:00 PM]
+Molty: 🔔 Reminder: call the dentist
 
 You: Learn how to summarise a webpage and save it as a skill
 Molty: Got it. I've added a new skill "Summarise webpage" to your Skills database.
@@ -160,12 +169,13 @@ OpenClaw stores skills and memory as Markdown files on disk. That's great for lo
 
 ```
 not-claw/
-├── index.js          # Entry point, boots gateway + heartbeat
+├── index.js          # Entry point, boots gateway + heartbeat + reminders
 ├── gateway.js        # Telegram bot (grammy)
 ├── agent.js          # Anthropic SDK agentic loop + Notion MCP tools
 ├── mcp-client.js     # MCP client — connects to Notion MCP server via stdio
 ├── notion.js         # Notion REST API wrapper (alternative to MCP)
 ├── heartbeat.js      # Cron scheduler for proactive runs
+├── reminders.js      # 1-minute reminder loop — checks DueAt, pings Telegram
 ├── oauth.js          # One-time OAuth flow for Notion public integrations
 ├── agent.test.js     # Unit tests
 ├── icon.svg          # App icon

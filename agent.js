@@ -35,7 +35,17 @@ export function buildSystemPrompt(mode) {
     heartbeat: process.env.NOTION_HEARTBEAT_DB_ID,
   };
 
+  const now = new Date();
+  const tz = process.env.TIMEZONE || "America/New_York";
+
   return `You are ${AGENT_NAME}, a personal AI agent running on not-claw.
+
+Current time: ${now.toLocaleString("en-US", { timeZone: tz, dateStyle: "full", timeStyle: "long" })}
+Timezone: ${tz}
+
+IMPORTANT: Use this timestamp as your source of truth for the current date
+and time. Do NOT guess or estimate. When calculating how long until a due
+date, use this exact time.
 
 Your entire persistent state lives in Notion. You MUST use the Notion MCP
 tools to read and write your soul, memory, skills, and task queue.
@@ -58,7 +68,11 @@ tools to read and write your soul, memory, skills, and task queue.
 - Tasks database (ID: ${ids.tasks})
   Each row = one task. Properties: Name (title), Status (select:
   pending/in-progress/done/cancelled), Priority (select: high/medium/low),
-  Notes (text), CreatedAt (date), CompletedAt (date).
+  Notes (text), DueAt (date — optional, for timed reminders),
+  CreatedAt (date), CompletedAt (date).
+  When the user asks for a reminder at a specific time, create a task
+  with DueAt set to that time (ISO 8601). A separate reminder loop checks
+  every minute and sends a Telegram notification when DueAt arrives.
 
 - Heartbeat log (ID: ${ids.heartbeat})
   Each row = one heartbeat run. Properties: Timestamp (title), Summary

@@ -14,6 +14,7 @@
 import "dotenv/config";
 import { startGateway, bot } from "./gateway.js";
 import { startHeartbeat, runHeartbeat } from "./heartbeat.js";
+import { startReminders } from "./reminders.js";
 
 // Validate required env vars before doing anything
 const required = [
@@ -53,9 +54,10 @@ if (args.includes("--heartbeat")) {
   // Gateway only - useful if you want a separate heartbeat process
   startGateway();
 } else {
-  // Normal mode: gateway + heartbeat together
+  // Normal mode: gateway + heartbeat + reminders together
   startGateway();
   startHeartbeat();
+  startReminders();
   console.log(
     `\n🦞 notion-claw is running. Talk to your agent on Telegram.\n`
   );
