@@ -1,9 +1,9 @@
 /**
  * agent.js
  *
- * The brain. Wraps the Claude Agent SDK and wires in Notion MCP as the
- * persistent context layer. Each call to runAgent() spins up a full
- * agentic loop: Claude reasons, calls Notion MCP tools, and returns a
+ * The brain. Uses the Anthropic SDK with Notion MCP for tool-use. Each call
+ * to runAgent() connects to the Notion MCP server, discovers tools, and runs
+ * an agentic loop: Claude reasons, calls Notion MCP tools, and returns a
  * final text response.
  *
  * Notion workspace layout:
@@ -14,29 +14,19 @@
  *   Heartbeat log — record of every proactive run
  */
 
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import Anthropic from "@anthropic-ai/sdk";
+import { getTools, callTool, connectMcp } from "./mcp-client.js";
 import "dotenv/config";
 
+const client = new Anthropic();
 const AGENT_NAME = process.env.AGENT_NAME || "Alfred";
-
-// Notion MCP server — gives Claude the full Notion tool suite via MCP
-const NOTION_MCP_SERVER = {
-  type: "url",
-  url: "https://mcp.notion.com/mcp",
-  name: "notion",
-  transportOptions: {
-    headers: {
-      Authorization: `Bearer ${process.env.NOTION_API_KEY}`,
-    },
-  },
-};
+const MODEL = "claude-sonnet-4-6";
+const MAX_TURNS = 20;
 
 /**
  * Builds the system prompt for each agent session.
- * Soul = identity (read once, stable)
- * Memory = accumulated knowledge (read and written each session)
  */
-function buildSystemPrompt(mode) {
+export function buildSystemPrompt(mode) {
   const ids = {
     soul:      process.env.NOTION_SOUL_PAGE_ID,
     memory:    process.env.NOTION_MEMORY_PAGE_ID,
@@ -110,42 +100,68 @@ If asked about pending tasks, query Tasks and summarise clearly.`
  * @param {string} mode    - "interactive" | "heartbeat"
  * @returns {string}       - Agent's final text response
  */
-export { buildSystemPrompt };
-
 export async function runAgent(prompt, mode = "interactive") {
-  const systemPrompt = buildSystemPrompt(mode);
-  let finalResult = "";
+  // Ensure MCP is connected and tools are discovered
+  await connectMcp();
+  const tools = await getTools();
 
-  try {
-    for await (const message of query({
-      prompt,
-      systemPrompt,
-      options: {
-        mcpServers: [NOTION_MCP_SERVER],
-        allowedTools: ["mcp__notion__*"],
-        maxTurns: 20,
-        model: "claude-sonnet-4-6",
-      },
-    })) {
-      if (message.type === "result") {
-        finalResult = message.result || "";
-      }
-      // Log tool calls for debugging
-      if (message.type === "assistant") {
-        for (const block of message.message?.content || []) {
-          if (block.type === "tool_use") {
-            console.log(
-              `[agent] tool_use: ${block.name}`,
-              JSON.stringify(block.input || {}).slice(0, 120)
-            );
-          }
+  const systemPrompt = buildSystemPrompt(mode);
+  const messages = [{ role: "user", content: prompt }];
+
+  for (let turn = 0; turn < MAX_TURNS; turn++) {
+    const response = await client.messages.create({
+      model: MODEL,
+      max_tokens: 4096,
+      system: systemPrompt,
+      tools,
+      messages,
+    });
+
+    // Collect the assistant's full content
+    messages.push({ role: "assistant", content: response.content });
+
+    // If the model stopped without tool use, extract text and return
+    if (response.stop_reason === "end_turn") {
+      const text = response.content
+        .filter((b) => b.type === "text")
+        .map((b) => b.text)
+        .join("\n");
+      return text || "Task completed.";
+    }
+
+    // Process tool calls
+    if (response.stop_reason === "tool_use") {
+      const toolResults = [];
+
+      for (const block of response.content) {
+        if (block.type !== "tool_use") continue;
+
+        console.log(
+          `[agent] tool_use: ${block.name}`,
+          JSON.stringify(block.input || {}).slice(0, 120)
+        );
+
+        try {
+          const result = await callTool(block.name, block.input);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: result,
+          });
+        } catch (err) {
+          console.error(`[agent] Tool error (${block.name}):`, err.message);
+          toolResults.push({
+            type: "tool_result",
+            tool_use_id: block.id,
+            content: `Error: ${err.message}`,
+            is_error: true,
+          });
         }
       }
+
+      messages.push({ role: "user", content: toolResults });
     }
-  } catch (err) {
-    console.error("[agent] Error:", err.message);
-    throw err;
   }
 
-  return finalResult || "Task completed.";
+  return "Reached maximum turns. Task may be incomplete.";
 }

@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- Background -->
+  <rect width="256" height="256" rx="48" fill="#1a1a2e"/>
+
+  <!-- Left claw - upper pincer (open top) -->
+  <g stroke="#e8e8f0" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Left claw arm -->
+    <path d="M 72 72 C 52 60, 36 52, 28 38" stroke-width="10"/>
+    <!-- Left upper pincer -->
+    <path d="M 28 38 C 22 28, 30 18, 40 22" stroke-width="9"/>
+    <!-- Left lower pincer -->
+    <path d="M 28 38 C 18 32, 18 20, 30 20" stroke-width="9"/>
+    <!-- Left pincer gap fill -->
+    <path d="M 40 22 Q 36 28, 30 20" stroke-width="6"/>
+  </g>
+
+  <!-- Right claw - upper pincer (open top) -->
+  <g stroke="#e8e8f0" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Right claw arm -->
+    <path d="M 184 72 C 204 60, 220 52, 228 38" stroke-width="10"/>
+    <!-- Right upper pincer -->
+    <path d="M 228 38 C 234 28, 226 18, 216 22" stroke-width="9"/>
+    <!-- Right lower pincer -->
+    <path d="M 228 38 C 238 32, 238 20, 226 20" stroke-width="9"/>
+    <!-- Right pincer gap fill -->
+    <path d="M 216 22 Q 220 28, 226 20" stroke-width="6"/>
+  </g>
+
+  <!-- Bold letter N -->
+  <text
+    x="128"
+    y="186"
+    font-family="Arial Black, Arial, sans-serif"
+    font-weight="900"
+    font-size="148"
+    text-anchor="middle"
+    fill="#e8e8f0"
+    letter-spacing="-2"
+  >N</text>
+</svg>
