@@ -75,6 +75,12 @@ tools to read and write your soul, memory, skills, and task queue.
   Each row = one heartbeat run. Properties: Timestamp (title), Summary
   (text), TasksActedOn (text), Outcome (text).
 
+## Tool usage notes
+
+- Do NOT use API-query-data-source — it targets a newer Notion API endpoint
+  that returns errors. Instead, use API-post-search to find database rows
+  and API-retrieve-a-database to inspect database schemas.
+
 ## Rules
 
 1. ALWAYS read your Soul page first — it defines who you are.
