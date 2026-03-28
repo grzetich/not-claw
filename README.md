@@ -140,6 +140,8 @@ The official `@notionhq/notion-mcp-server` is spawned as a stdio subprocess at s
 
 The agent typically makes 3-8 MCP tool calls per interaction. The code is just the loop — Notion MCP does the heavy lifting.
 
+**Note:** The MCP server exposes an `API-query-data-source` tool that targets Notion's newer `/v1/data_sources/` endpoint, which doesn't work with internal integrations. The system prompt steers Claude toward `API-post-search` and `API-retrieve-a-database` instead, which work reliably.
+
 ---
 
 ## License
