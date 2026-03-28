@@ -1,10 +1,8 @@
 # not-claw
 
-> An OpenClaw-inspired personal AI agent powered by the Anthropic SDK and Notion MCP.
+A personal AI agent that lives in Telegram and thinks in Notion.
 
-**not-claw** is a self-hosted personal AI agent that lives in your Telegram and thinks in Notion. It works while you sleep, learns new skills, remembers your preferences, and tackles your task queue on a schedule — all without a proprietary cloud backend.
-
-Inspired by [OpenClaw](https://openclaw.ai), rebuilt with **Notion as the persistent brain** and **Anthropic's SDK** as the reasoning engine, connected via the **Notion MCP server**.
+Inspired by [OpenClaw](https://openclaw.ai) — but instead of Markdown files on disk, the agent's entire brain is a Notion workspace accessed through the [Notion MCP server](https://github.com/notionhq/notion-mcp-server). Soul, memory, skills, tasks, and heartbeat logs are all Notion pages and databases that both you and the agent read and write to.
 
 ---
 
@@ -12,67 +10,44 @@ Inspired by [OpenClaw](https://openclaw.ai), rebuilt with **Notion as the persis
 
 ```
 You (Telegram)
-      │
-      ▼
- ┌─────────────┐
- │   Gateway   │  ← grammy Telegram bot
- │  gateway.js │
- └──────┬──────┘
-        │
-        ▼
- ┌─────────────┐    MCP (stdio)    ┌─────────────────────┐
- │    Agent    │◄─────────────────►│  Notion MCP Server  │
- │   agent.js  │                   │  (@notionhq/        │
- │             │                   │   notion-mcp-server) │
- └─────────────┘                   └────────┬────────────┘
-        ▲                                   │
-        │                                   ▼
- ┌─────────────┐                   ┌─────────────────────┐
- │  Heartbeat  │  ← node-cron     │   Notion Workspace  │
- │heartbeat.js │    (every 30 min) │  • 🧠 Soul page     │
- └─────────────┘                   │  • 🧠 Memory page   │
-                                   │  • ⚙️ Skills DB     │
-                                   │  • 📋 Tasks DB      │
-                                   │  • 💓 Heartbeat log │
-                                   └─────────────────────┘
+      |
+      v
+ +-----------+     MCP (stdio)     +---------------------+
+ |  Gateway   | ----------------->  |  Notion MCP Server  |
+ | gateway.js |     Agent loop      | @notionhq/          |
+ +-----------+  <-  agent.js  ->    |  notion-mcp-server   |
+      ^                             +---------+-----------+
+      |                                       |
+ +-----------+                                v
+ | Heartbeat |  <- node-cron         Notion Workspace
+ |heartbeat.js|   (every 30 min)     - Soul page
+ +-----------+                       - Memory page
+                                     - Skills DB
+                                     - Tasks DB
+                                     - Heartbeat log
 ```
 
-**The agent runtime is the Anthropic SDK** — Claude reasons over messages, discovers Notion MCP tools, and calls them in an agentic loop. The MCP client (`mcp-client.js`) spawns the official `@notionhq/notion-mcp-server` as a stdio subprocess and bridges tool calls between Claude and Notion.
+1. You message the bot on Telegram
+2. The gateway passes your message to the agent loop (`agent.js`)
+3. Claude reads your Soul and Memory pages, searches Skills, then does whatever you asked — all through Notion MCP tool calls
+4. Every 30 minutes, the heartbeat wakes the agent to work through pending tasks on its own
 
-**Notion is the entire persistent layer:**
-- **Soul page** — who the agent is, personality, owner preferences (stable, owner-edited)
-- **Memory page** — long-term context the agent reads and writes each session
-- **Skills database** — pages of instructions, searchable and writable by the agent
-- **Tasks database** — the task queue; the agent reads and writes status, notes, and timestamps
-- **Heartbeat log** — a record of every proactive run
+**Everything goes through Notion MCP.** The agent has zero hardcoded Notion API calls. Claude discovers 22 MCP tools at startup and decides which to call, in what order, with what arguments.
 
 ---
 
 ## Features
 
-- **Telegram interface** — talk to your agent from anywhere via DM
-- **Notion MCP** — official Notion MCP server for full read/write access to your workspace
-- **Notion-native memory** — all state in Notion, zero proprietary database
-- **Skill system** — the agent can discover skills from Notion and write new ones back
-- **Proactive heartbeat** — cron-scheduled wakeups to work through the task queue autonomously
-- **Anthropic SDK** — direct API tool-use loop with Claude (Sonnet for chat, Haiku for heartbeats)
-- **Owner-only access** — your Telegram chat ID is the auth layer
-- **Single process** — one `node index.js` runs everything
+- **Notion as the brain** — Soul, Memory, Skills, Tasks, and Heartbeat log are all Notion pages/databases. Visible, editable, portable.
+- **Proactive heartbeat** — every 30 minutes, the agent wakes up and works the task queue without being asked. Uses Haiku for cost efficiency.
+- **Self-improving skills** — tell the agent to learn something and it writes a new skill page to Notion. Future sessions use it automatically.
+- **Two-way collaboration** — add tasks in Notion directly and the heartbeat picks them up. Edit the Memory page to correct the agent. You and the bot share the same workspace.
+- **Configurable models** — Sonnet for interactive chat, Haiku for heartbeats, both swappable via env vars.
+- **Owner-only** — locked to your Telegram chat ID.
 
 ---
 
-## Prerequisites
-
-- Node.js 18+
-- An [Anthropic API key](https://console.anthropic.com/)
-- A Telegram bot token (from [@BotFather](https://t.me/botfather))
-- A Notion account with an internal integration
-
----
-
-## Setup
-
-### 1. Clone and install
+## Quick start
 
 ```bash
 git clone https://github.com/grzetich/not-claw
@@ -80,14 +55,9 @@ cd not-claw
 npm install
 ```
 
-### 2. Set up Notion
+Follow [NOTION_SETUP.md](./NOTION_SETUP.md) to create your Notion workspace (Soul page, Memory page, Skills DB, Tasks DB, Heartbeat log). Share all five with your integration.
 
-Follow [NOTION_SETUP.md](./NOTION_SETUP.md) to create:
-- A Notion integration (get your API key)
-- Soul page, Memory page, Skills database, Tasks database, Heartbeat log database
-- Share all five with your integration
-
-### 3. Configure `.env`
+Create a `.env`:
 
 ```env
 ANTHROPIC_API_KEY=sk-ant-...
@@ -106,60 +76,36 @@ MODEL_INTERACTIVE=claude-sonnet-4-6
 MODEL_HEARTBEAT=claude-haiku-4-5-20251001
 ```
 
-### 4. Run
+Set `TIMEZONE` to your [IANA timezone](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones) — the agent gets your exact local time in every prompt.
 
 ```bash
-npm start                  # Gateway + heartbeat (recommended)
+npm start                  # Gateway + heartbeat
 npm run heartbeat          # One-shot heartbeat test
-npm run gateway            # Gateway only
-npm run dev                # Watch mode for development
+npm run gateway            # Gateway only (no heartbeat)
 npm test                   # Run tests
 ```
 
 ---
 
-## Usage examples
-
-Once running, message your bot on Telegram:
+## Example conversation
 
 ```
-You: Add a task: research noise-cancelling headphones under $200, priority high
+You:   Add a task: research noise-cancelling headphones under $200, priority high
 Molty: Added to your task queue with high priority.
 
-You: What tasks are pending?
+You:   What tasks are pending?
 Molty: You have 3 pending tasks:
-        research noise-cancelling headphones under $200 (high)
-        write Q1 review draft (medium)
-        update grocery list (low)
+         research noise-cancelling headphones under $200 (high)
+         write Q1 review draft (medium)
+         update grocery list (low)
 
-You: Learn how to summarise a webpage and save it as a skill
-Molty: Got it. I've added a new skill "Summarise webpage" to your Skills database.
-       I'll use it next time you ask me to read a URL.
+You:   Learn how to summarise a webpage and save it as a skill
+Molty: Done — I've added "Summarise webpage" to your Skills database.
 
 [30 minutes later, heartbeat fires]
-Molty: Heartbeat — researched headphones. Top picks logged in task notes:
-       Sony WH-1000XM5, Bose QC45, Anker Q45. Task marked done.
+Molty: Heartbeat — researched headphones. Top picks: Sony WH-1000XM5,
+       Bose QC45, Anker Q45. Notes added, task marked done.
 ```
-
----
-
-## Architecture notes
-
-**Why the Anthropic SDK with Notion MCP?**
-
-The Anthropic SDK's Messages API with tool-use gives us a clean agentic loop: Claude reasons, calls tools, observes results, and continues. The MCP client discovers all 22 Notion tools at startup and bridges them into Claude's tool-use format. Claude can search, read, create, and update anything in your Notion workspace. Interactive messages use Sonnet for quality; heartbeats use Haiku for cost.
-
-**Why Notion MCP?**
-
-The official `@notionhq/notion-mcp-server` exposes Notion's entire API as MCP tools that Claude can call natively. Search databases, read pages, create rows, update blocks — all from within the agent loop with no custom integration code. The agent can also discover new Notion databases it wasn't explicitly told about, which makes the system genuinely extensible.
-
-**Two-way collaboration**
-
-Because the brain is Notion, both you and the agent are equal participants. Tell the bot to add a task via Telegram, then open Notion later to add details or reprioritize. Write a skill page directly in Notion and the agent picks it up next session. Edit the Memory page to correct something the agent got wrong. Add tasks straight to the database and the heartbeat will find them. Neither the bot nor you owns the data — you share it.
-
-**Why not OpenClaw's actual stack?**
-
-OpenClaw stores skills and memory as Markdown files on disk. That's great for local-first privacy, but it means you need the machine the files live on. Notion MCP gives you the same structured, searchable, human-readable persistence with the added benefit that you can view and edit your agent's brain from any device.
 
 ---
 
@@ -167,17 +113,32 @@ OpenClaw stores skills and memory as Markdown files on disk. That's great for lo
 
 ```
 not-claw/
-├── index.js          # Entry point, boots gateway + heartbeat
-├── gateway.js        # Telegram bot (grammy)
-├── agent.js          # Anthropic SDK agentic loop + Notion MCP tools
-├── mcp-client.js     # MCP client — connects to Notion MCP server via stdio
-├── heartbeat.js      # Cron scheduler for proactive runs
-├── oauth.js          # One-time OAuth flow for Notion public integrations
-├── agent.test.js     # Unit tests
-├── icon.svg          # App icon
-├── NOTION_SETUP.md   # Step-by-step Notion workspace setup
+├── index.js          Entry point — boots gateway + heartbeat
+├── gateway.js        Telegram bot (grammy), owner-only auth
+├── agent.js          Agentic loop — Anthropic SDK + Notion MCP tools
+├── mcp-client.js     MCP client — spawns Notion MCP server via stdio
+├── heartbeat.js      Cron scheduler for proactive runs
+├── agent.test.js     Tests (vitest)
+├── oauth.js          One-time OAuth flow for Notion public integrations
+├── NOTION_SETUP.md   Step-by-step Notion workspace setup
 └── package.json
 ```
+
+---
+
+## How Notion MCP is used
+
+The official `@notionhq/notion-mcp-server` is spawned as a stdio subprocess at startup. The MCP client discovers all available tools and converts them to Anthropic tool-use format. Claude decides which tools to call during each conversation.
+
+| Notion concept | What the agent does with it |
+|---|---|
+| **Soul page** | Reads first every session — defines identity and personality |
+| **Memory page** | Reads for context, appends new facts after each session |
+| **Skills DB** | Searches before non-trivial tasks, writes new skills when it learns |
+| **Tasks DB** | Creates, queries, and updates tasks as its work queue |
+| **Heartbeat log** | Logs every proactive run with timestamp, summary, and outcome |
+
+The agent typically makes 3-8 MCP tool calls per interaction. The code is just the loop — Notion MCP does the heavy lifting.
 
 ---
 
