@@ -20,8 +20,8 @@ import "dotenv/config";
 
 const client = new Anthropic();
 const AGENT_NAME = process.env.AGENT_NAME || "Alfred";
-const MODEL_INTERACTIVE = "claude-sonnet-4-6";
-const MODEL_HEARTBEAT = "claude-haiku-4-5-20251001";
+const MODEL_INTERACTIVE = process.env.MODEL_INTERACTIVE || "claude-sonnet-4-6";
+const MODEL_HEARTBEAT = process.env.MODEL_HEARTBEAT || "claude-haiku-4-5-20251001";
 const MAX_TURNS = 20;
 
 /**

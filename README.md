@@ -104,6 +104,8 @@ NOTION_HEARTBEAT_DB_ID=...
 HEARTBEAT_CRON=*/30 * * * *
 AGENT_NAME=Molty
 TIMEZONE=America/New_York
+MODEL_INTERACTIVE=claude-sonnet-4-6
+MODEL_HEARTBEAT=claude-haiku-4-5-20251001
 ```
 
 ### 4. Run
