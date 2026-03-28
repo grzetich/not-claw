@@ -111,7 +111,6 @@ Set these properties:
 | Status | Select | Options: `pending`, `in-progress`, `done`, `cancelled` |
 | Priority | Select | Options: `high`, `medium`, `low` |
 | Notes | Text | Agent progress notes |
-| DueAt | Date | Optional — for timed reminders (include time) |
 | CreatedAt | Date | |
 | CompletedAt | Date | Set when status → done |
 
@@ -203,12 +202,9 @@ npm run dev
   You can also edit it directly to give the agent facts about your life.
 - **Tasks can be anything.** The agent will try to complete them on heartbeat.
   Keep them small and specific for best results.
-- **Reminders are just tasks with a DueAt.** Tell the agent "remind me to X at
-  3pm" and it creates a task with a DueAt timestamp. A lightweight loop checks
-  every minute and sends you a Telegram ping when it's time. Zero API cost.
 - **Set your timezone** in `.env` as `TIMEZONE` (e.g. `America/New_York`,
   `Europe/London`). The agent uses this to know the current time and do
-  correct time math for reminders and due dates. Uses IANA timezone names —
+  correct time math for due dates. Uses IANA timezone names —
   see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 - **Run on a VPS or always-on machine** for true async proactive behavior.
   A $5/mo DigitalOcean droplet works great.

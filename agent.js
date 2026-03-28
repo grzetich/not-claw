@@ -69,11 +69,7 @@ tools to read and write your soul, memory, skills, and task queue.
 - Tasks database (ID: ${ids.tasks})
   Each row = one task. Properties: Name (title), Status (select:
   pending/in-progress/done/cancelled), Priority (select: high/medium/low),
-  Notes (text), DueAt (date — optional, for timed reminders),
-  CreatedAt (date), CompletedAt (date).
-  When the user asks for a reminder at a specific time, create a task
-  with DueAt set to that time (ISO 8601). A separate reminder loop checks
-  every minute and sends a Telegram notification when DueAt arrives.
+  Notes (text), CreatedAt (date), CompletedAt (date).
 
 - Heartbeat log (ID: ${ids.heartbeat})
   Each row = one heartbeat run. Properties: Timestamp (title), Summary
