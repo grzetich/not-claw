@@ -19,7 +19,7 @@ import { getFilteredTools, callTool, connectMcp } from "./mcp-client.js";
 import "dotenv/config";
 
 const client = new Anthropic();
-const AGENT_NAME = process.env.AGENT_NAME || "Alfred";
+const AGENT_NAME = process.env.AGENT_NAME || "Molty";
 const MODEL_INTERACTIVE = process.env.MODEL_INTERACTIVE || "claude-sonnet-4-6";
 const MODEL_HEARTBEAT = process.env.MODEL_HEARTBEAT || "claude-haiku-4-5-20251001";
 const MAX_TURNS = 20;
