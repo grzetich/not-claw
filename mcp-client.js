@@ -17,13 +17,13 @@ let cachedFilteredTools = null;
 // Tools the agent actually uses (filters out ~14 unused tools to save tokens)
 const ALLOWED_TOOLS = [
   "API-retrieve-a-page",
-  "API-retrieve-block-children",
-  "API-append-block-children",
-  "API-update-block",
+  "API-get-block-children",
+  "API-patch-block-children",
   "API-post-search",
   "API-retrieve-a-database",
-  "API-create-a-page",
-  "API-update-page-properties",
+  "API-post-page",
+  "API-patch-page",
+  "API-retrieve-a-page-property",
 ];
 
 /**
