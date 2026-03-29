@@ -43,7 +43,7 @@ async function getSoulContent() {
 
   try {
     await connectMcp();
-    const result = await callTool("API-retrieve-block-children", {
+    const result = await callTool("API-get-block-children", {
       block_id: soulPageId,
     });
     soulCache = { content: result, fetchedAt: now };
@@ -125,7 +125,9 @@ tools to read and write your soul, memory, skills, and task queue.
 - Do NOT use API-query-data-source — it targets a newer Notion API endpoint
   that returns errors. Instead, use API-post-search to find database rows
   and API-retrieve-a-database to inspect database schemas.
-- To create a page or database row, use API-post-page.
+- To create a page or database row, use API-post-page. IMPORTANT: the
+  "parent" parameter must be a JSON object, NOT a string. Correct example:
+  { "parent": {"database_id": "abc123"}, "properties": {...} }
 - To read a page's body content (blocks), use API-get-block-children.
 - To write or append body content to a page, use API-patch-block-children.
 
