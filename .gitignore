@@ -3,3 +3,5 @@ node_modules/
 dist/
 *.log
 .claude/
+DEVTO_SUBMISSION.md
+VIDEO_SCRIPT.md
