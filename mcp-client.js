@@ -12,6 +12,19 @@ import "dotenv/config";
 let client = null;
 let transport = null;
 let cachedTools = null;
+let cachedFilteredTools = null;
+
+// Tools the agent actually uses (filters out ~14 unused tools to save tokens)
+const ALLOWED_TOOLS = [
+  "API-retrieve-a-page",
+  "API-retrieve-block-children",
+  "API-append-block-children",
+  "API-update-block",
+  "API-post-search",
+  "API-retrieve-a-database",
+  "API-create-a-page",
+  "API-update-page-properties",
+];
 
 /**
  * Initialize the MCP client and connect to the local Notion MCP server.
@@ -64,6 +77,62 @@ export async function getTools() {
 }
 
 /**
+ * Get filtered tools (only the ones the agent actually uses).
+ * Reduces input tokens by ~1000 per API call.
+ */
+export async function getFilteredTools() {
+  if (cachedFilteredTools) return cachedFilteredTools;
+
+  const allTools = await getTools();
+  cachedFilteredTools = allTools.filter((t) => ALLOWED_TOOLS.includes(t.name));
+  console.log(`[mcp] Filtered to ${cachedFilteredTools.length} tools`);
+
+  return cachedFilteredTools;
+}
+
+/**
+ * Check if there are pending tasks in the Tasks DB.
+ * Direct MCP call — no Claude API usage.
+ * Returns true if there are pending/in-progress tasks.
+ */
+export async function checkPendingTasks() {
+  const tasksDbId = process.env.NOTION_TASKS_DB_ID;
+  if (!tasksDbId) {
+    console.error("[mcp] NOTION_TASKS_DB_ID not set");
+    return true; // Assume tasks exist if we can't check
+  }
+
+  try {
+    await connectMcp();
+    const result = await callTool("API-post-search", {
+      body: JSON.stringify({
+        filter: {
+          property: "object",
+          value: "page",
+        },
+        query: "",
+      }),
+    });
+
+    // Parse result and look for pending/in-progress tasks in our Tasks DB
+    const data = JSON.parse(result);
+    const pendingTasks = (data.results || []).filter((page) => {
+      if (page.parent?.database_id?.replace(/-/g, "") !== tasksDbId.replace(/-/g, "")) {
+        return false;
+      }
+      const status = page.properties?.Status?.select?.name;
+      return status === "pending" || status === "in-progress";
+    });
+
+    console.log(`[mcp] Found ${pendingTasks.length} pending/in-progress tasks`);
+    return pendingTasks.length > 0;
+  } catch (err) {
+    console.error("[mcp] Error checking pending tasks:", err.message);
+    return true; // Assume tasks exist on error
+  }
+}
+
+/**
  * Execute a tool call via the MCP server.
  */
 export async function callTool(name, args) {
@@ -89,6 +158,7 @@ export async function disconnectMcp() {
     client = null;
     transport = null;
     cachedTools = null;
+    cachedFilteredTools = null;
     console.log("[mcp] Disconnected");
   }
 }

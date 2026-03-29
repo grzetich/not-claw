@@ -43,6 +43,7 @@ You (Telegram)
 - **Self-improving skills** — tell the agent to learn something and it writes a new skill page to Notion. Future sessions use it automatically.
 - **Two-way collaboration** — add tasks in Notion directly and the heartbeat picks them up. Edit the Memory page to correct the agent. You and the bot share the same workspace.
 - **Configurable models** — Sonnet for interactive chat, Haiku for heartbeats, both swappable via env vars.
+- **Cost-optimized** — heartbeat skips Claude API calls when no tasks are pending, Soul page is cached, and only 8 of 22 MCP tools are sent to reduce input tokens.
 - **Owner-only** — locked to your Telegram chat ID.
 
 ---
@@ -132,13 +133,18 @@ The official `@notionhq/notion-mcp-server` is spawned as a stdio subprocess at s
 
 | Notion concept | What the agent does with it |
 |---|---|
-| **Soul page** | Reads first every session — defines identity and personality |
+| **Soul page** | Pre-fetched and cached (1-hour TTL), injected into system prompt |
 | **Memory page** | Reads for context, appends new facts after each session |
 | **Skills DB** | Searches before non-trivial tasks, writes new skills when it learns |
 | **Tasks DB** | Creates, queries, and updates tasks as its work queue |
 | **Heartbeat log** | Logs every proactive run with timestamp, summary, and outcome |
 
 The agent typically makes 3-8 MCP tool calls per interaction. The code is just the loop — Notion MCP does the heavy lifting.
+
+**Cost optimizations:**
+- Heartbeat pre-check queries Tasks DB via MCP directly — if no pending tasks, skips Claude entirely (zero API cost)
+- Soul page cached in memory for 1 hour, pre-injected into system prompt (saves 1 tool call per run)
+- Tool definitions filtered from 22 to 8 (saves ~1000 input tokens per API call)
 
 **Note:** The MCP server exposes an `API-query-data-source` tool that targets Notion's newer `/v1/data_sources/` endpoint, which doesn't work with internal integrations. The system prompt steers Claude toward `API-post-search` and `API-retrieve-a-database` instead, which work reliably.
 

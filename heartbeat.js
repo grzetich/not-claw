@@ -12,6 +12,7 @@
 
 import cron from "node-cron";
 import { runAgent } from "./agent.js";
+import { checkPendingTasks } from "./mcp-client.js";
 import { bot } from "./gateway.js";
 import "dotenv/config";
 
@@ -30,6 +31,14 @@ async function runHeartbeat() {
   heartbeatRunning = true;
   const timestamp = new Date().toISOString();
   console.log(`[heartbeat] Waking at ${timestamp}`);
+
+  // Pre-check: skip full agent run if no pending tasks (saves API $$$)
+  const hasTasks = await checkPendingTasks();
+  if (!hasTasks) {
+    console.log("[heartbeat] No pending tasks, skipping agent run.");
+    heartbeatRunning = false;
+    return;
+  }
 
   const prompt = `
 HEARTBEAT TRIGGER - ${timestamp}

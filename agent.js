@@ -15,7 +15,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
-import { getTools, callTool, connectMcp } from "./mcp-client.js";
+import { getFilteredTools, callTool, connectMcp } from "./mcp-client.js";
 import "dotenv/config";
 
 const client = new Anthropic();
@@ -24,10 +24,50 @@ const MODEL_INTERACTIVE = process.env.MODEL_INTERACTIVE || "claude-sonnet-4-6";
 const MODEL_HEARTBEAT = process.env.MODEL_HEARTBEAT || "claude-haiku-4-5-20251001";
 const MAX_TURNS = 20;
 
+// Soul page cache (refreshes every hour)
+let soulCache = { content: null, fetchedAt: 0 };
+const SOUL_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/**
+ * Fetch Soul page content, with caching.
+ */
+async function getSoulContent() {
+  const now = Date.now();
+  if (soulCache.content && now - soulCache.fetchedAt < SOUL_CACHE_TTL_MS) {
+    console.log("[agent] Using cached Soul content");
+    return soulCache.content;
+  }
+
+  const soulPageId = process.env.NOTION_SOUL_PAGE_ID;
+  if (!soulPageId) return null;
+
+  try {
+    await connectMcp();
+    const result = await callTool("API-retrieve-block-children", {
+      block_id: soulPageId,
+    });
+    soulCache = { content: result, fetchedAt: now };
+    console.log("[agent] Fetched and cached Soul content");
+    return result;
+  } catch (err) {
+    console.error("[agent] Error fetching Soul:", err.message);
+    return soulCache.content; // Return stale cache on error
+  }
+}
+
+/**
+ * Clear Soul cache (call when you know Soul has changed).
+ */
+export function clearSoulCache() {
+  soulCache = { content: null, fetchedAt: 0 };
+}
+
 /**
  * Builds the system prompt for each agent session.
+ * @param {string} mode - "interactive" or "heartbeat"
+ * @param {string|null} soulContent - Pre-fetched Soul content (saves a tool call)
  */
-export function buildSystemPrompt(mode) {
+export function buildSystemPrompt(mode, soulContent = null) {
   const ids = {
     soul:      process.env.NOTION_SOUL_PAGE_ID,
     memory:    process.env.NOTION_MEMORY_PAGE_ID,
@@ -38,6 +78,11 @@ export function buildSystemPrompt(mode) {
 
   const now = new Date();
   const tz = process.env.TIMEZONE || "America/New_York";
+
+  // If Soul content is pre-fetched, inject it to save a tool call
+  const soulSection = soulContent
+    ? `\n\n## Your Soul (pre-loaded, no need to fetch)\n\n${soulContent}`
+    : "";
 
   return `You are ${AGENT_NAME}, a personal AI agent running on not-claw.
 
@@ -81,9 +126,11 @@ tools to read and write your soul, memory, skills, and task queue.
   that returns errors. Instead, use API-post-search to find database rows
   and API-retrieve-a-database to inspect database schemas.
 
+${soulSection}
+
 ## Rules
 
-1. ALWAYS read your Soul page first — it defines who you are.
+1. If Soul is pre-loaded above, skip reading it. Otherwise read Soul first.
 2. ALWAYS read your Memory page — it gives you context about your owner.
 3. Search the Skills database before attempting any non-trivial task.
 4. Log progress on tasks in the Tasks database as you work.
@@ -97,7 +144,7 @@ tools to read and write your soul, memory, skills, and task queue.
 ${
   mode === "heartbeat"
     ? `You were woken by a scheduled heartbeat.
-1. Read Soul and Memory for context.
+1. Read Memory for context (Soul is pre-loaded above).
 2. Query Tasks for all pending/in-progress rows.
 3. Work through the highest-priority pending task if one exists.
 4. Update its Status and Notes in Notion.
@@ -123,9 +170,12 @@ export async function runAgent(prompt, mode = "interactive") {
 
   // Ensure MCP is connected and tools are discovered
   await connectMcp();
-  const tools = await getTools();
+  const tools = await getFilteredTools();
 
-  const systemPrompt = buildSystemPrompt(mode);
+  // Pre-fetch Soul content (cached, saves a tool call)
+  const soulContent = await getSoulContent();
+
+  const systemPrompt = buildSystemPrompt(mode, soulContent);
   const messages = [{ role: "user", content: prompt }];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
