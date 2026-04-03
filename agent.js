@@ -122,6 +122,7 @@ tools to read and write your soul, memory, skills, and task queue.
 
 ## Tool usage notes
 
+### Notion tools
 - Do NOT use API-query-data-source — it targets a newer Notion API endpoint
   that returns errors. Instead, use API-post-search to find database rows
   and API-retrieve-a-database to inspect database schemas.
@@ -130,6 +131,17 @@ tools to read and write your soul, memory, skills, and task queue.
   { "parent": {"database_id": "abc123"}, "properties": {...} }
 - To read a page's body content (blocks), use API-get-block-children.
 - To write or append body content to a page, use API-patch-block-children.
+
+### Fetch tool
+- Use the "fetch" tool to retrieve content from any URL on the web.
+- Useful for reading web pages, APIs, documentation, or any public URL.
+- Returns the page content as markdown by default.
+
+### Brave Search tool (if available)
+- Use "brave_web_search" to search the web for current information.
+- Use "brave_local_search" for location-based queries (businesses, places).
+- Prefer Brave Search when the user asks a question that requires up-to-date
+  information beyond what you already know.
 
 ${soulSection}
 

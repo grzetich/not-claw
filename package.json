@@ -16,6 +16,7 @@
   "license": "ISC",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.80.0",
+    "@brave/brave-search-mcp-server": "^2.0.75",
     "@modelcontextprotocol/sdk": "^1.28.0",
     "@notionhq/notion-mcp-server": "^2.2.1",
     "dotenv": "^17.3.1",

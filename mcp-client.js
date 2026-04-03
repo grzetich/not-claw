@@ -1,92 +1,172 @@
 /**
  * mcp-client.js
  *
- * Connects to the Notion MCP server as a local stdio subprocess.
- * Discovers available tools and executes them on behalf of the agent.
+ * Manages multiple MCP server connections (Notion, Fetch, Brave Search).
+ * Discovers available tools from all servers and routes tool calls to the
+ * correct server.
  */
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import "dotenv/config";
 
-let client = null;
-let transport = null;
-let cachedTools = null;
-let cachedFilteredTools = null;
-
-// Tools the agent actually uses (filters out ~14 unused tools to save tokens)
-const ALLOWED_TOOLS = [
-  "API-retrieve-a-page",
-  "API-get-block-children",
-  "API-patch-block-children",
-  "API-post-search",
-  "API-retrieve-a-database",
-  "API-post-page",
-  "API-patch-page",
-  "API-retrieve-a-page-property",
-];
-
 /**
- * Initialize the MCP client and connect to the local Notion MCP server.
+ * Registry of MCP server definitions.
+ * Each entry describes how to spawn the server and which tools to expose.
  */
-export async function connectMcp() {
-  if (client) return client;
+function getServerConfigs() {
+  const configs = {};
 
-  const token = process.env.NOTION_API_KEY;
-  if (!token) {
-    throw new Error("NOTION_API_KEY not set in .env");
+  // Notion MCP — always enabled
+  const notionKey = process.env.NOTION_API_KEY;
+  if (notionKey) {
+    configs.notion = {
+      command: "npx",
+      args: ["-y", "@notionhq/notion-mcp-server"],
+      env: {
+        ...process.env,
+        OPENAPI_MCP_HEADERS: JSON.stringify({
+          Authorization: `Bearer ${notionKey}`,
+          "Notion-Version": "2022-06-28",
+        }),
+      },
+      // Only expose the tools the agent actually uses
+      allowedTools: [
+        "API-retrieve-a-page",
+        "API-get-block-children",
+        "API-patch-block-children",
+        "API-post-search",
+        "API-retrieve-a-database",
+        "API-post-page",
+        "API-patch-page",
+        "API-retrieve-a-page-property",
+      ],
+    };
   }
 
-  transport = new StdioClientTransport({
-    command: "npx",
-    args: ["-y", "@notionhq/notion-mcp-server"],
-    env: {
-      ...process.env,
-      OPENAPI_MCP_HEADERS: JSON.stringify({
-        Authorization: `Bearer ${token}`,
-        "Notion-Version": "2022-06-28",
-      }),
-    },
+  // Fetch MCP — always enabled (no credentials needed)
+  configs.fetch = {
+    command: "uvx",
+    args: ["mcp-server-fetch"],
+    env: { ...process.env },
+    allowedTools: null, // expose all tools
+  };
+
+  // Brave Search MCP — enabled when BRAVE_API_KEY is set
+  const braveKey = process.env.BRAVE_API_KEY;
+  if (braveKey) {
+    configs["brave-search"] = {
+      command: "npx",
+      args: ["-y", "@brave/brave-search-mcp-server"],
+      env: { ...process.env, BRAVE_API_KEY: braveKey },
+      allowedTools: null, // expose all tools
+    };
+  }
+
+  return configs;
+}
+
+// State: one client + transport per server
+const servers = {}; // { [name]: { client, transport } }
+let cachedTools = null;
+let cachedFilteredTools = null;
+// Maps tool name → server name for routing
+const toolServerMap = {};
+
+/**
+ * Connect to a single MCP server by name.
+ */
+async function connectServer(name, config) {
+  if (servers[name]?.client) return servers[name].client;
+
+  const transport = new StdioClientTransport({
+    command: config.command,
+    args: config.args,
+    env: config.env,
   });
 
-  client = new Client({ name: "not-claw", version: "1.0.0" });
+  const client = new Client({ name: `not-claw-${name}`, version: "1.0.0" });
   await client.connect(transport);
-  console.log("[mcp] Connected to Notion MCP server (stdio)");
+  servers[name] = { client, transport };
+  console.log(`[mcp] Connected to ${name} MCP server (stdio)`);
   return client;
 }
 
 /**
- * Discover tools from the Notion MCP server.
+ * Initialize all MCP server connections.
+ */
+export async function connectMcp() {
+  const configs = getServerConfigs();
+  const pending = [];
+
+  for (const [name, config] of Object.entries(configs)) {
+    if (!servers[name]?.client) {
+      pending.push(
+        connectServer(name, config).catch((err) => {
+          console.error(`[mcp] Failed to connect ${name}:`, err.message);
+        })
+      );
+    }
+  }
+
+  if (pending.length > 0) {
+    await Promise.all(pending);
+  }
+}
+
+/**
+ * Discover tools from all connected MCP servers.
  * Returns them in Anthropic tool-use format.
  */
 export async function getTools() {
   if (cachedTools) return cachedTools;
 
-  const mcp = await connectMcp();
-  const { tools } = await mcp.listTools();
+  await connectMcp();
+  const allTools = [];
 
-  console.log(`[mcp] Discovered ${tools.length} tools`);
+  for (const [name, { client }] of Object.entries(servers)) {
+    if (!client) continue;
 
-  cachedTools = tools.map((t) => ({
-    name: t.name,
-    description: t.description || "",
-    input_schema: t.inputSchema,
-  }));
+    try {
+      const { tools } = await client.listTools();
+      console.log(`[mcp] ${name}: discovered ${tools.length} tools`);
 
+      for (const t of tools) {
+        toolServerMap[t.name] = name;
+        allTools.push({
+          name: t.name,
+          description: t.description || "",
+          input_schema: t.inputSchema,
+        });
+      }
+    } catch (err) {
+      console.error(`[mcp] Error listing tools for ${name}:`, err.message);
+    }
+  }
+
+  console.log(`[mcp] Total tools discovered: ${allTools.length}`);
+  cachedTools = allTools;
   return cachedTools;
 }
 
 /**
- * Get filtered tools (only the ones the agent actually uses).
- * Reduces input tokens by ~1000 per API call.
+ * Get filtered tools (Notion filtered to allowed list, others pass through).
+ * Reduces input tokens by removing unused Notion tools.
  */
 export async function getFilteredTools() {
   if (cachedFilteredTools) return cachedFilteredTools;
 
   const allTools = await getTools();
-  cachedFilteredTools = allTools.filter((t) => ALLOWED_TOOLS.includes(t.name));
-  console.log(`[mcp] Filtered to ${cachedFilteredTools.length} tools`);
+  const configs = getServerConfigs();
 
+  cachedFilteredTools = allTools.filter((t) => {
+    const serverName = toolServerMap[t.name];
+    const config = configs[serverName];
+    if (!config || !config.allowedTools) return true;
+    return config.allowedTools.includes(t.name);
+  });
+
+  console.log(`[mcp] Filtered to ${cachedFilteredTools.length} tools`);
   return cachedFilteredTools;
 }
 
@@ -133,11 +213,18 @@ export async function checkPendingTasks() {
 }
 
 /**
- * Execute a tool call via the MCP server.
+ * Execute a tool call, routing to the correct MCP server.
  */
 export async function callTool(name, args) {
-  const mcp = await connectMcp();
-  const result = await mcp.callTool({ name, arguments: args });
+  const serverName = toolServerMap[name];
+  if (!serverName || !servers[serverName]?.client) {
+    throw new Error(`Unknown tool or server not connected: ${name}`);
+  }
+
+  const result = await servers[serverName].client.callTool({
+    name,
+    arguments: args,
+  });
 
   const text = (result.content || [])
     .map((block) => {
@@ -150,15 +237,24 @@ export async function callTool(name, args) {
 }
 
 /**
- * Disconnect the MCP client.
+ * Disconnect all MCP clients.
  */
 export async function disconnectMcp() {
-  if (client) {
-    await client.close();
-    client = null;
-    transport = null;
-    cachedTools = null;
-    cachedFilteredTools = null;
-    console.log("[mcp] Disconnected");
+  const pending = [];
+  for (const [name, { client }] of Object.entries(servers)) {
+    if (client) {
+      pending.push(
+        client.close().then(() => {
+          console.log(`[mcp] Disconnected ${name}`);
+        })
+      );
+    }
   }
+  await Promise.all(pending);
+
+  // Reset state
+  for (const name of Object.keys(servers)) delete servers[name];
+  cachedTools = null;
+  cachedFilteredTools = null;
+  for (const key of Object.keys(toolServerMap)) delete toolServerMap[key];
 }
