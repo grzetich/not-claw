@@ -115,16 +115,36 @@ export async function checkPendingTasks() {
     });
 
     // Parse result and look for pending/in-progress tasks in our Tasks DB
-    const data = JSON.parse(result);
-    const pendingTasks = (data.results || []).filter((page) => {
-      if (page.parent?.database_id?.replace(/-/g, "") !== tasksDbId.replace(/-/g, "")) {
+    // Paginate through all search results to avoid missing tasks
+    let allResults = [];
+    let data = JSON.parse(result);
+    allResults.push(...(data.results || []));
+
+    while (data.has_more && data.next_cursor) {
+      const nextResult = await callTool("API-post-search", {
+        body: JSON.stringify({
+          filter: { property: "object", value: "page" },
+          query: "",
+          start_cursor: data.next_cursor,
+        }),
+      });
+      data = JSON.parse(nextResult);
+      allResults.push(...(data.results || []));
+    }
+
+    const normalizedDbId = tasksDbId.replace(/-/g, "");
+    const pendingTasks = allResults.filter((page) => {
+      if (page.parent?.database_id?.replace(/-/g, "") !== normalizedDbId) {
         return false;
       }
-      const status = page.properties?.Status?.select?.name;
+      // Support both Notion "Select" and native "Status" property types
+      const status =
+        page.properties?.Status?.select?.name ||
+        page.properties?.Status?.status?.name;
       return status === "pending" || status === "in-progress";
     });
 
-    console.log(`[mcp] Found ${pendingTasks.length} pending/in-progress tasks`);
+    console.log(`[mcp] Found ${pendingTasks.length} pending/in-progress task(s) out of ${allResults.length} pages searched`);
     return pendingTasks.length > 0;
   } catch (err) {
     console.error("[mcp] Error checking pending tasks:", err.message);
