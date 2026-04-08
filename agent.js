@@ -124,8 +124,12 @@ tools to read and write your soul, memory, skills, and task queue.
 
 ### Notion tools
 - Do NOT use API-query-data-source — it targets a newer Notion API endpoint
-  that returns errors. Instead, use API-post-search to find database rows
-  and API-retrieve-a-database to inspect database schemas.
+  that returns errors.
+- To query a database (e.g. Tasks, Skills), use API-query-a-database with
+  the database_id and a body containing filter/sort/page_size. Example:
+  { "database_id": "abc123", "body": "{\"filter\":{...}}" }
+- Use API-post-search for broad workspace searches.
+- Use API-retrieve-a-database to inspect database schemas.
 - To create a page or database row, use API-post-page. IMPORTANT: the
   "parent" parameter must be a JSON object, NOT a string. Correct example:
   { "parent": {"database_id": "abc123"}, "properties": {...} }

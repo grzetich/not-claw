@@ -37,6 +37,7 @@ function getServerConfigs() {
         "API-patch-block-children",
         "API-post-search",
         "API-retrieve-a-database",
+        "API-query-a-database",
         "API-post-page",
         "API-patch-page",
         "API-retrieve-a-page-property",
@@ -46,8 +47,8 @@ function getServerConfigs() {
 
   // Fetch MCP — always enabled (no credentials needed)
   configs.fetch = {
-    command: "uvx",
-    args: ["mcp-server-fetch"],
+    command: "npx",
+    args: ["-y", "mcp-server-fetch-typescript"],
     env: { ...process.env },
     allowedTools: null, // expose all tools
   };
@@ -184,28 +185,23 @@ export async function checkPendingTasks() {
 
   try {
     await connectMcp();
-    const result = await callTool("API-post-search", {
+    const result = await callTool("API-query-a-database", {
+      database_id: tasksDbId,
       body: JSON.stringify({
         filter: {
-          property: "object",
-          value: "page",
+          or: [
+            { property: "Status", select: { equals: "pending" } },
+            { property: "Status", select: { equals: "in-progress" } },
+          ],
         },
-        query: "",
+        page_size: 1,
       }),
     });
 
-    // Parse result and look for pending/in-progress tasks in our Tasks DB
     const data = JSON.parse(result);
-    const pendingTasks = (data.results || []).filter((page) => {
-      if (page.parent?.database_id?.replace(/-/g, "") !== tasksDbId.replace(/-/g, "")) {
-        return false;
-      }
-      const status = page.properties?.Status?.select?.name;
-      return status === "pending" || status === "in-progress";
-    });
-
-    console.log(`[mcp] Found ${pendingTasks.length} pending/in-progress tasks`);
-    return pendingTasks.length > 0;
+    const count = (data.results || []).length;
+    console.log(`[mcp] Found ${count} pending/in-progress task(s)`);
+    return count > 0;
   } catch (err) {
     console.error("[mcp] Error checking pending tasks:", err.message);
     return true; // Assume tasks exist on error
