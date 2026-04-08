@@ -185,6 +185,7 @@ export async function checkPendingTasks() {
 
   try {
     await connectMcp();
+    await getTools(); // ensure tool map is populated before callTool
     const result = await callTool("API-query-a-database", {
       database_id: tasksDbId,
       body: JSON.stringify({
