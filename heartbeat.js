@@ -46,7 +46,12 @@ HEARTBEAT TRIGGER - ${timestamp}
 You've been woken by a scheduled heartbeat check. This is proactive mode.
 
 1. Read your Memory page for context.
-2. Query the Tasks database for all pending and in-progress tasks.
+2. Query the Tasks database using API-query-a-database with this filter:
+   { "or": [
+     { "property": "Status", "select": { "equals": "pending" } },
+     { "property": "Status", "select": { "equals": "in-progress" } }
+   ] }
+   Do NOT use API-post-search for this — it cannot filter by property values.
 3. If there are pending tasks, pick the highest priority one and work on it.
    Update its Status to "in-progress" (or "done" if you complete it).
    Add notes about what you did in the task's Notes field.
