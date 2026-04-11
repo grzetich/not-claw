@@ -172,15 +172,15 @@ export async function getFilteredTools() {
 }
 
 /**
- * Check if there are pending tasks in the Tasks DB.
+ * Fetch pending/in-progress tasks from the Tasks DB.
  * Direct MCP call — no Claude API usage.
- * Returns true if there are pending/in-progress tasks.
+ * Returns an array of task summaries, or null on error.
  */
-export async function checkPendingTasks() {
+export async function fetchPendingTasks() {
   const tasksDbId = process.env.NOTION_TASKS_DB_ID;
   if (!tasksDbId) {
     console.error("[mcp] NOTION_TASKS_DB_ID not set");
-    return true; // Assume tasks exist if we can't check
+    return null;
   }
 
   try {
@@ -195,17 +195,23 @@ export async function checkPendingTasks() {
             { property: "Status", select: { equals: "in-progress" } },
           ],
         },
-        page_size: 1,
       }),
     });
 
     const data = JSON.parse(result);
-    const count = (data.results || []).length;
-    console.log(`[mcp] Found ${count} pending/in-progress task(s)`);
-    return count > 0;
+    const pages = data.results || [];
+    console.log(`[mcp] Found ${pages.length} pending/in-progress task(s)`);
+
+    return pages.map((page) => ({
+      id: page.id,
+      name: page.properties?.Name?.title?.[0]?.plain_text || "(untitled)",
+      status: page.properties?.Status?.select?.name || page.properties?.Status?.status?.name || "unknown",
+      priority: page.properties?.Priority?.select?.name || "none",
+      notes: page.properties?.Notes?.rich_text?.[0]?.plain_text || "",
+    }));
   } catch (err) {
-    console.error("[mcp] Error checking pending tasks:", err.message);
-    return true; // Assume tasks exist on error
+    console.error("[mcp] Error fetching pending tasks:", err.message);
+    return null;
   }
 }
 

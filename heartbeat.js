@@ -12,7 +12,7 @@
 
 import cron from "node-cron";
 import { runAgent } from "./agent.js";
-import { checkPendingTasks } from "./mcp-client.js";
+import { fetchPendingTasks } from "./mcp-client.js";
 import { bot } from "./gateway.js";
 import "dotenv/config";
 
@@ -32,36 +32,41 @@ async function runHeartbeat() {
   const timestamp = new Date().toISOString();
   console.log(`[heartbeat] Waking at ${timestamp}`);
 
-  // Pre-check: skip full agent run if no pending tasks (saves API $$$)
-  const hasTasks = await checkPendingTasks();
-  if (!hasTasks) {
+  // Pre-fetch pending tasks (saves the model from querying + filtering)
+  const tasks = await fetchPendingTasks();
+  if (!tasks || tasks.length === 0) {
     console.log("[heartbeat] No pending tasks, skipping agent run.");
     heartbeatRunning = false;
     return;
   }
+
+  const taskList = tasks
+    .map((t) => `- [${t.priority}] "${t.name}" (status: ${t.status}, id: ${t.id})${t.notes ? ` — ${t.notes}` : ""}`)
+    .join("\n");
 
   const prompt = `
 HEARTBEAT TRIGGER - ${timestamp}
 
 You've been woken by a scheduled heartbeat check. This is proactive mode.
 
+## Pending tasks (pre-loaded, no need to query)
+
+${taskList}
+
+## Instructions
+
 1. Read your Memory page for context.
-2. Query the Tasks database using API-query-a-database with this filter:
-   { "or": [
-     { "property": "Status", "select": { "equals": "pending" } },
-     { "property": "Status", "select": { "equals": "in-progress" } }
-   ] }
-   Do NOT use API-post-search for this — it cannot filter by property values.
-3. If there are pending tasks, pick the highest priority one and work on it.
-   Update its Status to "in-progress" (or "done" if you complete it).
+2. Pick the highest priority task from the list above and work on it.
+   Use the task's page ID to update it directly with API-patch-page.
+   Set Status to "in-progress" (or "done" if you complete it).
    Add notes about what you did in the task's Notes field.
-4. Log this heartbeat run in the Heartbeat log database with:
+3. Log this heartbeat run in the Heartbeat log database with:
    - Timestamp: now
    - Summary: what you found and did
    - TasksActedOn: which task(s) you touched
    - Outcome: result
-5. Update your Memory page if you learned anything new.
-6. Return a brief, friendly Telegram-ready summary of what happened.
+4. Update your Memory page if you learned anything new.
+5. Return a brief, friendly Telegram-ready summary of what happened.
    Start with one of these emojis to indicate status:
    ✅ if you completed or progressed a task
    💤 if there was nothing to do (no pending tasks)
