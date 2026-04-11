@@ -8,6 +8,7 @@
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { getGoogleToolDefinitions, callGoogleTool, isGoogleTool } from "./google-tools.js";
 import "dotenv/config";
 
 /**
@@ -145,6 +146,16 @@ export async function getTools() {
     }
   }
 
+  // Register custom Google tools (not MCP — direct API wrappers)
+  const googleTools = getGoogleToolDefinitions();
+  for (const t of googleTools) {
+    toolServerMap[t.name] = "google";
+    allTools.push(t);
+  }
+  if (googleTools.length > 0) {
+    console.log(`[mcp] google: registered ${googleTools.length} custom tools`);
+  }
+
   console.log(`[mcp] Total tools discovered: ${allTools.length}`);
   cachedTools = allTools;
   return cachedTools;
@@ -213,6 +224,11 @@ export async function checkPendingTasks() {
  * Execute a tool call, routing to the correct MCP server.
  */
 export async function callTool(name, args) {
+  // Route Google tools to custom handlers (no MCP server)
+  if (isGoogleTool(name)) {
+    return await callGoogleTool(name, args);
+  }
+
   const serverName = toolServerMap[name];
   if (!serverName || !servers[serverName]?.client) {
     throw new Error(`Unknown tool or server not connected: ${name}`);

@@ -147,6 +147,19 @@ tools to read and write your soul, memory, skills, and task queue.
 - Prefer Brave Search when the user asks a question that requires up-to-date
   information beyond what you already know.
 
+### Google Docs tools (if available)
+- Use "google_docs_search" to find Google Docs by name or content.
+- Use "google_docs_read" to read the full text of a Google Doc by its ID.
+- Useful when the owner asks about documents, wants summaries, or references
+  information stored in Google Docs.
+
+### Gmail tools (if available)
+- Use "gmail_search" to search emails (supports Gmail query syntax like
+  "from:alice subject:meeting", "is:unread", "newer_than:7d").
+- Use "gmail_read" to read the full content of a specific email.
+- Use "gmail_send" to send a new email or reply to an existing thread.
+- IMPORTANT: Always confirm with the owner before sending emails.
+
 ${soulSection}
 
 ## Rules
