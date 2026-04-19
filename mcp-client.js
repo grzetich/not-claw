@@ -172,44 +172,6 @@ export async function getFilteredTools() {
 }
 
 /**
- * Check if there are pending tasks in the Tasks DB.
- * Direct MCP call — no Claude API usage.
- * Returns true if there are pending/in-progress tasks.
- */
-export async function checkPendingTasks() {
-  const tasksDbId = process.env.NOTION_TASKS_DB_ID;
-  if (!tasksDbId) {
-    console.error("[mcp] NOTION_TASKS_DB_ID not set");
-    return true; // Assume tasks exist if we can't check
-  }
-
-  try {
-    await connectMcp();
-    await getTools(); // ensure tool map is populated before callTool
-    const result = await callTool("API-query-a-database", {
-      database_id: tasksDbId,
-      body: JSON.stringify({
-        filter: {
-          or: [
-            { property: "Status", select: { equals: "pending" } },
-            { property: "Status", select: { equals: "in-progress" } },
-          ],
-        },
-        page_size: 1,
-      }),
-    });
-
-    const data = JSON.parse(result);
-    const count = (data.results || []).length;
-    console.log(`[mcp] Found ${count} pending/in-progress task(s)`);
-    return count > 0;
-  } catch (err) {
-    console.error("[mcp] Error checking pending tasks:", err.message);
-    return true; // Assume tasks exist on error
-  }
-}
-
-/**
  * Execute a tool call, routing to the correct MCP server.
  */
 export async function callTool(name, args) {

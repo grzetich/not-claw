@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, vi } from "vitest";
 
 // Set env vars before importing agent module
 beforeEach(() => {
@@ -11,6 +11,13 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = "sk-test";
   process.env.NOTION_API_KEY = "secret_test";
 });
+
+// Warm the module graph once — importing agent.js transitively loads the
+// OpenAI + Anthropic SDKs and MCP SDK, which blows a per-test 5s timeout
+// on a cold run.
+beforeAll(async () => {
+  await import("./agent.js");
+}, 30000);
 
 // Mock the agent SDK so importing agent.js doesn't need real credentials
 vi.mock("@anthropic-ai/claude-agent-sdk", () => ({

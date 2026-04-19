@@ -1,9 +1,10 @@
 /**
  * agent.js
  *
- * The brain. Uses the Anthropic SDK with Notion MCP for tool-use. Each call
- * to runAgent() connects to the Notion MCP server, discovers tools, and runs
- * an agentic loop: Claude reasons, calls Notion MCP tools, and returns a
+ * The brain. Talks to an LLM (Anthropic or a local OpenAI-compatible
+ * server, see llm.js) with Notion MCP tools exposed. Each call to
+ * runAgent() connects to the Notion MCP server, discovers tools, and runs
+ * an agentic loop: the model reasons, calls MCP tools, and returns a
  * final text response.
  *
  * Notion workspace layout:
@@ -14,14 +15,12 @@
  *   Heartbeat log — record of every proactive run
  */
 
-import Anthropic from "@anthropic-ai/sdk";
 import { getFilteredTools, callTool, connectMcp } from "./mcp-client.js";
+import { runLlmTurn, resolveModel, getProvider } from "./llm.js";
+import { getPageText } from "./notion-api.js";
 import "dotenv/config";
 
-const client = new Anthropic();
 const AGENT_NAME = process.env.AGENT_NAME || "Molty";
-const MODEL_INTERACTIVE = process.env.MODEL_INTERACTIVE || "claude-sonnet-4-6";
-const MODEL_HEARTBEAT = process.env.MODEL_HEARTBEAT || "claude-haiku-4-5-20251001";
 const MAX_TURNS = 20;
 
 // Soul page cache (refreshes every hour)
@@ -42,13 +41,11 @@ async function getSoulContent() {
   if (!soulPageId) return null;
 
   try {
-    await connectMcp();
-    const result = await callTool("API-get-block-children", {
-      block_id: soulPageId,
-    });
-    soulCache = { content: result, fetchedAt: now };
-    console.log("[agent] Fetched and cached Soul content");
-    return result;
+    // Direct Notion REST — no need to spin up MCP for a fixed page fetch.
+    const text = await getPageText(soulPageId);
+    soulCache = { content: text, fetchedAt: now };
+    console.log("[agent] Fetched and cached Soul content (direct API)");
+    return text;
   } catch (err) {
     console.error("[agent] Error fetching Soul:", err.message);
     return soulCache.content; // Return stale cache on error
@@ -186,8 +183,8 @@ If asked about pending tasks, query Tasks and summarise clearly.`
  * @returns {string}       - Agent's final text response
  */
 export async function runAgent(prompt, mode = "interactive") {
-  const model = mode === "heartbeat" ? MODEL_HEARTBEAT : MODEL_INTERACTIVE;
-  console.log(`[agent] Using model: ${model}`);
+  const model = resolveModel(mode);
+  console.log(`[agent] Using ${getProvider()} provider, model: ${model}`);
 
   // Ensure MCP is connected and tools are discovered
   await connectMcp();
@@ -200,9 +197,8 @@ export async function runAgent(prompt, mode = "interactive") {
   const messages = [{ role: "user", content: prompt }];
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
-    const response = await client.messages.create({
+    const response = await runLlmTurn({
       model,
-      max_tokens: 4096,
       system: systemPrompt,
       tools,
       messages,
@@ -212,7 +208,7 @@ export async function runAgent(prompt, mode = "interactive") {
     messages.push({ role: "assistant", content: response.content });
 
     // If the model stopped without tool use, extract text and return
-    if (response.stop_reason === "end_turn") {
+    if (response.stopReason === "end_turn") {
       const text = response.content
         .filter((b) => b.type === "text")
         .map((b) => b.text)
@@ -221,7 +217,7 @@ export async function runAgent(prompt, mode = "interactive") {
     }
 
     // Process tool calls
-    if (response.stop_reason === "tool_use") {
+    if (response.stopReason === "tool_use") {
       const toolResults = [];
 
       for (const block of response.content) {

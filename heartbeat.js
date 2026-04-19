@@ -12,7 +12,7 @@
 
 import cron from "node-cron";
 import { runAgent } from "./agent.js";
-import { checkPendingTasks } from "./mcp-client.js";
+import { checkPendingTasks } from "./notion-api.js";
 import { bot } from "./gateway.js";
 import "dotenv/config";
 
