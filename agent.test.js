@@ -13,8 +13,8 @@ beforeEach(() => {
 });
 
 // Warm the module graph once — importing agent.js transitively loads the
-// Anthropic SDK, MCP SDK, and the very large googleapis module, which
-// blows the per-test 5s timeout on a cold run.
+// OpenAI + Anthropic SDKs, MCP SDK, and the very large googleapis module,
+// which blows the per-test 5s timeout on a cold run.
 beforeAll(async () => {
   await import("./agent.js");
 }, 60000);

@@ -42,7 +42,7 @@ You (Telegram)
 - **Proactive heartbeat** — every 30 minutes, the agent wakes up and works the task queue without being asked. Uses Haiku for cost efficiency.
 - **Self-improving skills** — tell the agent to learn something and it writes a new skill page to Notion. Future sessions use it automatically.
 - **Two-way collaboration** — add tasks in Notion directly and the heartbeat picks them up. Edit the Memory page to correct the agent. You and the bot share the same workspace.
-- **Configurable models** — Sonnet for interactive chat, Haiku for heartbeats, both swappable via env vars.
+- **Configurable models** — Sonnet for interactive chat, Haiku for heartbeats, both swappable via env vars. Or run entirely against a local OpenAI-compatible server (Ollama, LM Studio, vLLM, llama.cpp).
 - **Cost-optimized** — heartbeat skips Claude API calls when no tasks are pending, Soul page is cached, and only 8 of 22 MCP tools are sent to reduce input tokens.
 - **Owner-only** — locked to your Telegram chat ID.
 - **Google tools (optional)** — search/read Google Docs, search/read/send Gmail. Opt-in via OAuth.
@@ -86,6 +86,33 @@ npm run heartbeat          # One-shot heartbeat test
 npm run gateway            # Gateway only (no heartbeat)
 npm test                   # Run tests
 ```
+
+---
+
+## Running against a local model
+
+You can swap Claude for any OpenAI-compatible local server (Ollama, LM Studio, vLLM, llama.cpp server, Jan, text-generation-webui, …). The model name and endpoint are env-driven, so whatever you have running locally works as long as it speaks the OpenAI chat-completions API and supports tool use.
+
+Add these to your `.env` instead of (or alongside) the Claude vars:
+
+```env
+MODEL_PROVIDER=local
+LOCAL_MODEL_NAME=llama3.1:8b
+LOCAL_MODEL_BASE_URL=http://localhost:11434/v1
+LOCAL_MODEL_API_KEY=not-needed
+LOCAL_MODEL_MAX_TOKENS=4096
+```
+
+`LOCAL_MODEL_NAME` is whatever name your server exposes (e.g. `qwen2.5:32b`, `mistral-small`, `llama3.1:8b`, `gemma3:12b`). `LOCAL_MODEL_BASE_URL` points at the OpenAI-compatible endpoint:
+
+| Server | Base URL |
+|---|---|
+| Ollama | `http://localhost:11434/v1` |
+| LM Studio | `http://localhost:1234/v1` |
+| vLLM | `http://localhost:8000/v1` |
+| llama.cpp server | `http://localhost:8080/v1` |
+
+When `MODEL_PROVIDER=local`, `ANTHROPIC_API_KEY` is not required. Tool use quality varies by model — for a heartbeat loop that makes 3-8 MCP calls per run, prefer models known to handle function calling well (e.g. Qwen 2.5, Llama 3.1 70B, Mistral Small).
 
 ---
 
@@ -162,8 +189,10 @@ Molty: Heartbeat — researched headphones. Top picks: Sony WH-1000XM5,
 not-claw/
 ├── index.js          Entry point — boots gateway + heartbeat
 ├── gateway.js        Telegram bot (grammy), owner-only auth
-├── agent.js          Agentic loop — Anthropic SDK + Notion MCP tools
+├── agent.js          Agentic loop — model provider + Notion MCP tools
+├── llm.js            Provider layer (Anthropic or local OpenAI-compat)
 ├── mcp-client.js     MCP client — spawns Notion MCP server via stdio
+├── notion-api.js     Direct Notion REST client for code-driven calls
 ├── google-client.js  Authenticated Google API clients (lazy-loaded)
 ├── google-tools.js   Google Docs and Gmail tool handlers
 ├── google-oauth.js   One-time OAuth flow to get a Google refresh token
@@ -191,9 +220,13 @@ The official `@notionhq/notion-mcp-server` is spawned as a stdio subprocess at s
 The agent typically makes 3-8 MCP tool calls per interaction. The code is just the loop — Notion MCP does the heavy lifting.
 
 **Cost optimizations:**
-- Heartbeat pre-check queries Tasks DB via MCP directly — if no pending tasks, skips Claude entirely (zero API cost)
-- Soul page cached in memory for 1 hour, pre-injected into system prompt (saves 1 tool call per run)
+- Heartbeat pre-fetch queries Tasks DB via direct Notion REST — if no pending tasks, skips both MCP startup and the LLM entirely (zero API cost). The task list is then injected into the prompt so the model doesn't need to re-query.
+- Soul page fetched via direct Notion REST, cached in memory for 1 hour, pre-injected into system prompt (saves 1 tool call per run)
 - Tool definitions filtered from 22 to 8 (saves ~1000 input tokens per API call)
+
+**Hybrid Notion access.** The code can talk to Notion two ways and picks whichever fits the task:
+- **MCP (`mcp-client.js`)** — exposed to the LLM. The model discovers tools at runtime and decides which to call. Flexible, open-ended.
+- **Direct REST (`notion-api.js`)** — called from code when the query is already known (pre-checks, Soul fetch, heartbeat log writes). No MCP startup, no LLM in the loop.
 
 **Note:** The MCP server exposes an `API-query-data-source` tool that targets Notion's newer `/v1/data_sources/` endpoint, which doesn't work with internal integrations. The system prompt steers Claude toward `API-post-search` and `API-retrieve-a-database` instead, which work reliably.
 

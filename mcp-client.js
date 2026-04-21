@@ -183,50 +183,6 @@ export async function getFilteredTools() {
 }
 
 /**
- * Fetch pending/in-progress tasks from the Tasks DB.
- * Direct MCP call — no Claude API usage.
- * Returns an array of task summaries, or null on error.
- */
-export async function fetchPendingTasks() {
-  const tasksDbId = process.env.NOTION_TASKS_DB_ID;
-  if (!tasksDbId) {
-    console.error("[mcp] NOTION_TASKS_DB_ID not set");
-    return null;
-  }
-
-  try {
-    await connectMcp();
-    await getTools(); // ensure tool map is populated before callTool
-    const result = await callTool("API-query-a-database", {
-      database_id: tasksDbId,
-      body: JSON.stringify({
-        filter: {
-          or: [
-            { property: "Status", select: { equals: "pending" } },
-            { property: "Status", select: { equals: "in-progress" } },
-          ],
-        },
-      }),
-    });
-
-    const data = JSON.parse(result);
-    const pages = data.results || [];
-    console.log(`[mcp] Found ${pages.length} pending/in-progress task(s)`);
-
-    return pages.map((page) => ({
-      id: page.id,
-      name: page.properties?.Name?.title?.[0]?.plain_text || "(untitled)",
-      status: page.properties?.Status?.select?.name || page.properties?.Status?.status?.name || "unknown",
-      priority: page.properties?.Priority?.select?.name || "none",
-      notes: page.properties?.Notes?.rich_text?.[0]?.plain_text || "",
-    }));
-  } catch (err) {
-    console.error("[mcp] Error fetching pending tasks:", err.message);
-    return null;
-  }
-}
-
-/**
  * Execute a tool call, routing to the correct MCP server.
  */
 export async function callTool(name, args) {

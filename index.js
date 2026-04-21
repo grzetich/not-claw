@@ -16,9 +16,12 @@ import { startGateway, bot } from "./gateway.js";
 import { startHeartbeat, runHeartbeat } from "./heartbeat.js";
 
 
-// Validate required env vars before doing anything
+// Validate required env vars before doing anything.
+// When MODEL_PROVIDER=local we need a local model config instead of an
+// Anthropic API key.
+const provider = (process.env.MODEL_PROVIDER || "anthropic").toLowerCase();
+
 const required = [
-  "ANTHROPIC_API_KEY",
   "TELEGRAM_BOT_TOKEN",
   "TELEGRAM_OWNER_CHAT_ID",
   "NOTION_API_KEY",
@@ -28,6 +31,12 @@ const required = [
   "NOTION_TASKS_DB_ID",
   "NOTION_HEARTBEAT_DB_ID",
 ];
+
+if (provider === "local") {
+  required.push("LOCAL_MODEL_NAME", "LOCAL_MODEL_BASE_URL");
+} else {
+  required.push("ANTHROPIC_API_KEY");
+}
 
 const missing = required.filter((k) => !process.env[k]);
 if (missing.length > 0) {

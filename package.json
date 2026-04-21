@@ -22,7 +22,8 @@
     "dotenv": "^17.3.1",
     "googleapis": "^171.4.0",
     "grammy": "^1.41.1",
-    "node-cron": "^4.2.1"
+    "node-cron": "^4.2.1",
+    "openai": "^4.104.0"
   },
   "devDependencies": {
     "vitest": "^4.1.2"

@@ -12,7 +12,7 @@
 
 import cron from "node-cron";
 import { runAgent } from "./agent.js";
-import { fetchPendingTasks } from "./mcp-client.js";
+import { fetchPendingTasks } from "./notion-api.js";
 import { bot } from "./gateway.js";
 import "dotenv/config";
 
@@ -32,7 +32,8 @@ async function runHeartbeat() {
   const timestamp = new Date().toISOString();
   console.log(`[heartbeat] Waking at ${timestamp}`);
 
-  // Pre-fetch pending tasks (saves the model from querying + filtering)
+  // Pre-fetch pending tasks via direct Notion REST. If none, skip the
+  // agent run entirely — no MCP spawn, no LLM call, no API cost.
   const tasks = await fetchPendingTasks();
   if (!tasks || tasks.length === 0) {
     console.log("[heartbeat] No pending tasks, skipping agent run.");
