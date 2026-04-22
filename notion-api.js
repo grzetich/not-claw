@@ -102,8 +102,8 @@ export async function fetchPendingTasks(tasksDbId = process.env.NOTION_TASKS_DB_
     const data = await queryDatabase(tasksDbId, {
       filter: {
         or: [
-          { property: "Status", select: { equals: "pending" } },
-          { property: "Status", select: { equals: "in-progress" } },
+          { property: "Status", status: { equals: "pending" } },
+          { property: "Status", status: { equals: "in-progress" } },
         ],
       },
     });

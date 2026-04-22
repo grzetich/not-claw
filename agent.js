@@ -109,9 +109,15 @@ tools to read and write your soul, memory, skills, and task queue.
   when you figure out how to do something new — this is how you improve.
 
 - Tasks database (ID: ${ids.tasks})
-  Each row = one task. Properties: Name (title), Status (select:
+  Each row = one task. Properties: Name (title), Status (status:
   pending/in-progress/done/cancelled), Priority (select: high/medium/low),
   Notes (text), CreatedAt (date), CompletedAt (date).
+
+  IMPORTANT: Status is Notion's "status" property type, NOT "select". When
+  setting or filtering Status, use the "status" key, not "select":
+    Setting:   "Status": { "status": { "name": "pending" } }
+    Filtering: { "property": "Status", "status": { "equals": "pending" } }
+  Priority is a regular "select" property — use "select" for it as usual.
 
 - Heartbeat log (ID: ${ids.heartbeat})
   Each row = one heartbeat run. Properties: Timestamp (title), Summary

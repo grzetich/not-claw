@@ -106,6 +106,13 @@ async function handleMessage(ctx, userText) {
     }
   } catch (err) {
     console.error("[gateway] Agent error:", err.message);
+    console.error("[gateway] Error detail:", {
+      name: err.name,
+      status: err.status,
+      code: err.code,
+      cause: err.cause,
+    });
+    if (err.stack) console.error(err.stack);
     await ctx.reply(
       `❌ Something went wrong: ${err.message}\n\nCheck the logs.`
     );
