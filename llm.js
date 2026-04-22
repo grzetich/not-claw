@@ -36,7 +36,11 @@ function getOpenAi() {
   if (!openaiClient) {
     const baseURL = process.env.LOCAL_MODEL_BASE_URL || "http://localhost:11434/v1";
     const apiKey = process.env.LOCAL_MODEL_API_KEY || "not-needed";
-    openaiClient = new OpenAI({ baseURL, apiKey });
+    // Default 30 min — CPU inference on a 10 GB model with many tools can
+    // push past the OpenAI SDK's 10 min default, especially on the first
+    // turn when the prompt is cold.
+    const timeout = parseInt(process.env.LOCAL_MODEL_TIMEOUT_MS || "1800000", 10);
+    openaiClient = new OpenAI({ baseURL, apiKey, timeout });
   }
   return openaiClient;
 }
