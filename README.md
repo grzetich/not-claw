@@ -228,7 +228,7 @@ The agent typically makes 3-8 MCP tool calls per interaction. The code is just t
 - **MCP (`mcp-client.js`)** — exposed to the LLM. The model discovers tools at runtime and decides which to call. Flexible, open-ended.
 - **Direct REST (`notion-api.js`)** — called from code when the query is already known (pre-checks, Soul fetch, heartbeat log writes). No MCP startup, no LLM in the loop.
 
-**Note:** The MCP server exposes an `API-query-data-source` tool that targets Notion's newer `/v1/data_sources/` endpoint, which doesn't work with internal integrations. The system prompt steers Claude toward `API-post-search` and `API-retrieve-a-database` instead, which work reliably.
+**Note:** Notion MCP server v2.x renamed `post-database-query` (and its Claude-exposed alias `API-query-a-database`) to `query-data-source`, using `data_source_id` instead of `database_id`. The system prompt instructs the model to call `API-retrieve-a-database` first to get the data source ID, then `API-query-data-source`.
 
 ---
 

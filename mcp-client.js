@@ -31,14 +31,16 @@ function getServerConfigs() {
           "Notion-Version": "2022-06-28",
         }),
       },
-      // Only expose the tools the agent actually uses
+      // Only expose the tools the agent actually uses.
+      // Notion MCP v2.x replaced API-query-a-database with API-query-data-source
+      // (and database_id → data_source_id). Older name no longer exists.
       allowedTools: [
         "API-retrieve-a-page",
         "API-get-block-children",
         "API-patch-block-children",
         "API-post-search",
         "API-retrieve-a-database",
-        "API-query-a-database",
+        "API-query-data-source",
         "API-post-page",
         "API-patch-page",
         "API-retrieve-a-page-property",
