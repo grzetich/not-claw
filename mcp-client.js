@@ -164,15 +164,23 @@ export async function getTools() {
 }
 
 /**
- * Get filtered tools (Notion filtered to allowed list, others pass through).
- * Reduces input tokens by removing unused Notion tools.
+ * Get filtered tools. For Anthropic, applies each server's allowedTools
+ * list to keep the input-token cost down. For local models (self-hosted,
+ * token cost is free), skips filtering and exposes every discovered tool.
  */
 export async function getFilteredTools() {
   if (cachedFilteredTools) return cachedFilteredTools;
 
   const allTools = await getTools();
-  const configs = getServerConfigs();
+  const provider = (process.env.MODEL_PROVIDER || "anthropic").toLowerCase();
 
+  if (provider === "local") {
+    cachedFilteredTools = allTools;
+    console.log(`[mcp] Local provider — exposing all ${allTools.length} tools`);
+    return cachedFilteredTools;
+  }
+
+  const configs = getServerConfigs();
   cachedFilteredTools = allTools.filter((t) => {
     const serverName = toolServerMap[t.name];
     const config = configs[serverName];
