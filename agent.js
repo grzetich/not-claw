@@ -142,6 +142,41 @@ tools to read and write your soul, memory, skills, and task queue.
 - To read a page's body content (blocks), use API-get-block-children.
 - To write or append body content to a page, use API-patch-block-children.
 
+### Notion property shapes (get these EXACTLY right — 400 errors are common)
+
+Every rich_text and title value is an ARRAY of objects, and each object
+needs "type" plus a nested "text": { "content": "..." }. NOT a bare string.
+
+Writing the Notes (rich_text) field on a task:
+  "properties": {
+    "Notes": {
+      "rich_text": [
+        { "type": "text", "text": { "content": "what I did" } }
+      ]
+    }
+  }
+
+Setting the Name (title) field when creating a task:
+  "properties": {
+    "Name": {
+      "title": [
+        { "type": "text", "text": { "content": "research headphones" } }
+      ]
+    }
+  }
+
+Setting the Status (status type — NOT select):
+  "properties": { "Status": { "status": { "name": "in-progress" } } }
+
+Setting Priority (select type):
+  "properties": { "Priority": { "select": { "name": "high" } } }
+
+Setting a date property:
+  "properties": { "CompletedAt": { "date": { "start": "2026-04-23" } } }
+
+If Notion returns a 400, it is almost always a property-shape error.
+Re-check against the patterns above before retrying.
+
 ### Fetch tool
 - Use the "fetch" tool to retrieve content from any URL on the web.
 - Useful for reading web pages, APIs, documentation, or any public URL.
@@ -226,15 +261,22 @@ export async function runAgent(prompt, mode = "interactive") {
       messages,
     });
 
+    const textBlocks = response.content.filter((b) => b.type === "text");
+    const toolBlocks = response.content.filter((b) => b.type === "tool_use");
+    console.log(
+      `[agent] turn ${turn}: stop=${response.stopReason} text=${textBlocks.length} tools=${toolBlocks.length}`
+    );
+    if (textBlocks.length > 0) {
+      const preview = textBlocks.map((b) => b.text).join(" ").slice(0, 200);
+      console.log(`[agent] text: ${preview}`);
+    }
+
     // Collect the assistant's full content
     messages.push({ role: "assistant", content: response.content });
 
     // If the model stopped without tool use, extract text and return
     if (response.stopReason === "end_turn") {
-      const text = response.content
-        .filter((b) => b.type === "text")
-        .map((b) => b.text)
-        .join("\n");
+      const text = textBlocks.map((b) => b.text).join("\n");
       return text || "Task completed.";
     }
 
